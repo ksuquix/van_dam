@@ -33,6 +33,12 @@ class LibrariesController < ApplicationController
       @tag = ActsAsTaggableOn::Tag.find_by(name: params[:tag])
       @models = @models.tagged_with(@tag) if @tag
     end
+
+    # Filter by collection?
+    if params[:collection]
+      @collection = ActsAsTaggableOn::Tag.for_context(:collections).find_by(name: params[:tag])
+      @models = @models.tagged_with(@collection, context: :collection) if @collection
+    end
   end
 
   def new
