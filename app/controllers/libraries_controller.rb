@@ -36,7 +36,7 @@ class LibrariesController < ApplicationController
 
     # Filter by collection?
     if params[:collection]
-      @collection = ActsAsTaggableOn::Tag.for_context(:collections).find_by(name: params[:tag])
+      @collection = ActsAsTaggableOn::Tag.for_context(:collections).find_by(name: params[:collection])
       @models = @models.tagged_with(@collection, context: :collection) if @collection
     end
   end
