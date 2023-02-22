@@ -1,6 +1,7 @@
 class ModelsController < ApplicationController
   before_action :get_library, except: [:index, :bulk_edit, :bulk_update]
   before_action :get_model, except: [:bulk_edit, :bulk_update, :index]
+  before_action :get_filters, only: [:bulk_edit, :bulk_update, :index]
 
   def index
     @models = Model.all.includes(:tags, :preview_file, :creator)
@@ -21,28 +22,36 @@ class ModelsController < ApplicationController
     @tags = Model.includes(:tags).map(&:tags).flatten.uniq.sort_by(&:name).select { |x| x.taggings_count > 1 }
 
     # filter by library?
-    @models = @models.where(library: params[:library]) if params[:library]
+    @models = @models.where(library: @filters[:library]) if @filters[:library]
 
     # Filter by tag?
-    if params[:tag]
-      @tag = ActsAsTaggableOn::Tag.named_any(params[:tag])
-      @models = @models.tagged_with(params[:tag]) if params[:tag]
+    if @filters[:tag]
+      @tag = ActsAsTaggableOn::Tag.named_any(@filters[:tag])
+      @models = @models.tagged_with(@filters[:tag])
     end
 
     # Filter by collection?
-    if params[:collection]
-      @collection = ActsAsTaggableOn::Tag.for_context(:collections).find(params[:collection])
+    if @filters[:collection]
+      @collection = ActsAsTaggableOn::Tag.for_context(:collections).find(@filters[:collection])
       @models = @models.tagged_with(@collection, context: :collection) if @collection
     end
 
     # Filter by creator
-    @models = @models.where(creator_id: params[:creator]) if params[:creator]
+    case @filters[:creator]
+    when nil
+      nil # No creator specified, nothing to do
+    when "nil"
+      @models = @models.where(creator_id: nil)
+    else
+      @creator = Creator.find(@filters[:creator])
+      @models = @models.where(creator: @creator)
+    end
 
     # keyword search filter
-    if params[:q]
+    if @filters[:q]
       field = Model.arel_table[:name]
-      creatorsearch = Creator.where("name LIKE ?", "%#{params[:q]}%")
-      @models = @models.where("tags.name LIKE ?", "%#{params[:q]}%").or(@models.where(field.matches("%#{params[:q]}%"))).or(@models.where(creator_id: creatorsearch))
+      creatorsearch = Creator.where("name LIKE ?", "%#{@filters[:q]}%")
+      @models = @models.where("tags.name LIKE ?", "%#{@filters[:q]}%").or(@models.where(field.matches("%#{@filters[:q]}%"))).or(@models.where(creator_id: creatorsearch))
         .joins("INNER JOIN taggings ON taggings.taggable_id=models.id AND taggings.taggable_type = 'Model' INNER JOIN tags ON tags.id = taggings.tag_id").distinct
     end
 
@@ -115,7 +124,7 @@ class ModelsController < ApplicationController
         end
       end
     end
-    redirect_to edit_models_path(models_path, helpers.params_passthrough)
+    redirect_to edit_models_path(models_path, @filters)
   end
 
   def destroy
@@ -127,7 +136,6 @@ class ModelsController < ApplicationController
 
   def bulk_update_params
     params.permit(
-      :scale_factor,
       :creator_id,
       :new_library_id,
       :organize,
@@ -145,7 +153,6 @@ class ModelsController < ApplicationController
       :name,
       :excerpt,
       :notes,
-      :scale_factor,
       :collection,
       :q,
       :library,
@@ -165,5 +172,10 @@ class ModelsController < ApplicationController
   def get_model
     @model = Model.includes(:model_files, :creator).find(params[:id])
     @title = @model.name
+  end
+
+  def get_filters
+    # Get list filters from URL
+    @filters = params.permit(:library, :collection, :q, :creator, tag: [])
   end
 end
