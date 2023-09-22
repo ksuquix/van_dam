@@ -15,6 +15,19 @@ class LibraryScanJob < ApplicationJob
     end
   end
 
+  # any path that is a subdirectory of an existing model: process as that model
+  def model_trim_paths(library, folders)
+    matching_models = []
+    library.models.map do |x|
+      if folders.reject! { |folder| Regexp.new("^" + File.join(library.path, x.path)).match?(folder) }
+        matching_models.push(File.join(library.path, x.path))
+      end
+    end
+    logger.debug("xyzzy trimmed")
+    logger.debug(matching_models)
+    folders.concat(matching_models)
+  end
+
   def clean_up_missing_models(library)
     library.models.each do |m|
       if !File.exist?(File.join(library.path, m.path))
@@ -68,10 +81,15 @@ class LibraryScanJob < ApplicationJob
     changes = (known_filenames(library).to_set ^ filenames_on_disk(library)).to_a
     # Make a list of library-relative folders with changed files
     folders_with_changes = changes.map { |f| File.dirname(f.gsub(library.path, "")) }.uniq
-    folders_with_changes = filter_out_common_subfolders(folders_with_changes)
-    folders_with_changes.delete("/")
+    # TODO:  whack subfolders of other things here.
+    folders_with_changes = model_trim_paths(library, folders_with_changes)
+    # trim based on library models
+    # kill any subdirs (set min depth first?)
+    folders_with_changes = filter_out_common_subfolders(folders_with_changes).uniq
+    folders_with_changes.delete("/")s
     folders_with_changes.compact_blank!
     # For each folder in the library with a change, find or create a model, then scan it
+    logger.debug(folders_with_changes)
     folders_with_changes.each do |path|
       new_model_properties = {
         name: File.basename(path).humanize.tr("+", " ").titleize

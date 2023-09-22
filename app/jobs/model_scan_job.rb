@@ -32,7 +32,9 @@ class ModelScanJob < ApplicationJob
         # File.join(dir.path, ApplicationJob.file_pattern),
         # File.join(dir.path, "files", ApplicationJob.file_pattern),
         # File.join(dir.path, "images", ApplicationJob.image_pattern)
-        File.join(dir.path, "**/*")
+        File.join(dir.path, "*"),
+        File.join(dir.path, "files", "*"),
+        File.join(dir.path, "images", "*")
       ]).reject { |filename| File.directory?(filename) }.uniq.each do |filename|
         # Create the file
         file = model.model_files.find_or_create_by(filename: filename.gsub(model_path + "/", ""))
